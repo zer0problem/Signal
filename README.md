@@ -1,5 +1,5 @@
 # Signal
-a simple signal system that's meant to be a type safe implementation of the observer pattern that does not require a specific observer class and is simple to use
+A simple signal system that's meant to be a type safe implementation of the observer pattern that does not require a specific observer class and is simple to use, this requires C++17
 
 A simple example in with a Main function
 ```cpp
