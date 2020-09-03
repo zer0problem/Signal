@@ -9,56 +9,63 @@ A simple example in with a Main function
 #include <iostream>
 #include "Signal.h"
 
-void BasicFunction() {
+void BasicFunction()
+{
     std::cout << "a function taking no arguments" << std::endl;
 }
-void AddNumbers(int a, int b) {
+void AddNumbers(int a, int b)
+{
     std::cout << (a + b) << std::endl;
 }
 
-class Foo {
+class Foo
+{
 public:
-    void Print() {
+    void Print()
+    {
         std::cout << "Foo print from " << this << std::endl;
     }
 };
 
-void Fighter(Foo *aFoo) {
+void Fighter(Foo *aFoo)
+{
     std::cout << aFoo << " is a real fighter" << std::endl;
 }
 
-void PrintSquared(float aNum) {
+void PrintSquared(float aNum)
+{
     std::cout << (aNum * aNum) << std::endl;
 }
 
-int main() {
+int main()
+{
     Signal basicSignal;
 
     // connecting a function without an object
-    basicSignal.Connect(&BasicFunction);
+    basicSignal.Connect<&BasicFunction>();
     // this does not work, it's type safe so it will not compile and complain about wrong argument types and counts
-    //basicSignal.Connect(&AddNumbers);
-    
+    //basicSignal.Connect<&AddNumbers>();
+
     // connect an object with a member function
     Foo foo;
-    basicSignal.Connect(&foo, &Foo::Print);
+    basicSignal.Connect<&Foo::Print>(&foo);
 
     // connect an object with a non-member function
-    basicSignal.Connect(&foo, &Fighter);
+    basicSignal.Connect<&Fighter>(&foo);
 
     // Emits the signal, calls all connected functions with the objects in the order they were connected
     basicSignal.Emit();
 
     // Disconnecting has the same syntax
-    basicSignal.Disconnect(&BasicFunction);
-    basicSignal.Disconnect(&foo, &Foo::Print);
-    basicSignal.Disconnect(&foo, &Fighter);
+    basicSignal.Disconnect<&BasicFunction>();
+    basicSignal.Disconnect<&Foo::Print>(&foo);
+    basicSignal.Disconnect<&Fighter>(&foo);
 
     // Signals can be made to take arguments as well
     Signal<float> advancedSignal;
 
     // the function still needs to take the proper arguments
-    advancedSignal.Connect(&PrintSquared);
+    advancedSignal.Connect<&PrintSquared>();
 
     // Emitting needs the proper arguments for the signal
     advancedSignal.Emit(3.2);
@@ -79,7 +86,7 @@ Connecting to it
 ```cpp
 // with a global function
 void SomeFunction();
-mySignal.Connect(&SomeFunction);
+mySignal.Connect<&SomeFunction>();
 
 // with a member function
 class SomeClass {
@@ -87,11 +94,11 @@ public:
   void SomeClassFunction();
 };
 SomeClass myObject;
-mySignal.Connect(&myObject, &SomeClass::SomeClassFunction);
+mySignal.Connect<&SomeClass::SomeClassFunction>(&myObject);
 
 // with an object pointer connected as first argument to a function
 void SomeOtherFunction(SomeClass *aObject);
-mySignal.Connect(&myObject, &SomeOtherFunction);
+mySignal.Connect<&SomeOtherFunction>(&myObject);
 ```
 Emitting
 ```cpp
@@ -100,7 +107,7 @@ myOtherSignal.Emit(42, 3.22f);
 ```
 Disconnecting, this has the same syntax as connecting
 ```cpp
-mySignal.Disconnect(&SomeFunction);
-mySignal.Disconnect(&myObject, &SomeClass::SomeClassFunction);
-mySignal.Disconnect(&myObject, &SomeOtherFunction);
+mySignal.Disconnect<&SomeFunction>();
+mySignal.Disconnect<&SomeClass::SomeClassFunction>(&myObject);
+mySignal.Disconnect<&SomeOtherFunction>(&myObject);
 ```
