@@ -2,37 +2,61 @@
 // https://github.com/zer0problem/Signal/
 #pragma once
 #include <vector>
+#include <type_traits>
 #include <functional>
 
 template<class ...ArgumentTypes>
 class Signal
 {
 public:
-	// matches the correct private Connect function, allows only sending the function in as a template argument instead of both Type, Function* and Source*
 	template<auto Callback, class SourceType>
-	inline void Connect(SourceType *aSource)
+	void Connect(SourceType *aSource)
 	{
-		Connect<SourceType, Callback>(aSource);
+		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&MemberFunction<Callback, SourceType>), aSource));
 	}
-	// directly adds a sourceless or global function
-	template<void (*TemplateFunction)(ArgumentTypes...)>
+	template<auto Callback>
 	void Connect()
 	{
-		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&GlobalFunction<TemplateFunction>), nullptr));
+		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&GlobalFunction<Callback>), nullptr));
 	}
-	// matches the correct private Disconnect function, just like the Connect function
-	template<auto Callback, class SourceType>
-	inline void Disconnect(SourceType *aSource)
+	template<class CallbackType>
+	void Connect(CallbackType *aCallback)
 	{
-		Disconnect<SourceType, Callback>(aSource);
+		static_assert(std::is_invocable<CallbackType, ArgumentTypes...>::value, "CallbackType is not a pointer to an invocable type");
+		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&FunctorFunction<CallbackType>), aCallback));
 	}
-	// searches for and removes the first matching Connection of the type
-	template<void (*TemplateFunction)(ArgumentTypes...)>
+	
+	template<auto Callback, class SourceType>
+	void Disconnect(SourceType *aSource)
+	{
+		for (auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
+		{
+			if (reinterpret_cast<VoidFunctionPointer>(&MemberFunction<Callback, SourceType>) == it->first && it->second == aSource)
+			{
+				mySubscribers.erase(it);
+				break;
+			}
+		}
+	}
+	template<auto Callback>
 	void Disconnect()
 	{
-		for(auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
+		for (auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
 		{
-			if(reinterpret_cast<VoidFunctionPointer>(&GlobalFunction<TemplateFunction>) == it->first)
+			if (reinterpret_cast<VoidFunctionPointer>(&GlobalFunction<Callback>) == it->first)
+			{
+				mySubscribers.erase(it);
+				break;
+			}
+		}
+	}
+	template<class CallbackType>
+	void Disconnect(CallbackType *aCallback)
+	{
+		static_assert(std::is_invocable<CallbackType, ArgumentTypes...>::value, "CallbackType is not of an invocable type");
+		for (auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
+		{
+			if (reinterpret_cast<VoidFunctionPointer>(&FunctorFunction<CallbackType>) == it->first && it->second == aCallback)
 			{
 				mySubscribers.erase(it);
 				break;
@@ -41,7 +65,7 @@ public:
 	}
 	void Emit(ArgumentTypes ...aArguments)
 	{
-		for(auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
+		for (auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
 		{
 			(*it).first((*it).second, aArguments...);
 		}
@@ -51,57 +75,19 @@ private:
 	using TemplateFunctionPair = std::pair<VoidFunctionPointer, void *>;
 	std::vector<TemplateFunctionPair> mySubscribers;
 
-	// these 3 template functions that the function pair is gonna point at, takes and resolves the correct function at compiling, avoiding vtables for virtual classes to target the correct function
-	template<class SourceType, void (SourceType:: *TemplateFunction)(ArgumentTypes...)>
+	template<auto Callback, class SourceType>
 	static void MemberFunction(SourceType *aSource, ArgumentTypes... aArguments)
 	{
-		(aSource->*TemplateFunction)(aArguments...);
+		std::invoke(Callback, aSource, aArguments...);
 	}
-	template<class SourceType, void (*TemplateFunction)(SourceType *, ArgumentTypes...)>
-	static void StaticFunction(SourceType *aSource, ArgumentTypes... aArguments)
-	{
-		(*TemplateFunction)(aSource, aArguments...);
-	}
-	template<void (*TemplateFunction)(ArgumentTypes...)>
+	template<auto Callback>
 	static void GlobalFunction(void *, ArgumentTypes... aArguments)
 	{
-		(*TemplateFunction)(aArguments...);
+		std::invoke(Callback, aArguments...);
 	}
-	
-	// these 2 matches appropriate template function according to what type is sent in and adds the pointer to the function and the object
-	template<class SourceType, void (SourceType:: *TemplateFunction)(ArgumentTypes...)>
-	void Connect(SourceType *aSource)
+	template<class CallbackType>
+	static void FunctorFunction(CallbackType *aFunctor, ArgumentTypes... aArguments)
 	{
-		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&MemberFunction<SourceType, TemplateFunction>), aSource));
-	}
-	template<class SourceType, void (*TemplateFunction)(SourceType *, ArgumentTypes...)>
-	void Connect(SourceType *aSource)
-	{
-		mySubscribers.push_back(TemplateFunctionPair(reinterpret_cast<VoidFunctionPointer>(&StaticFunction<SourceType, TemplateFunction>), aSource));
-	}
-	// these 2 matches appropriate template function according to what type is sent in and removes a matching pointer to the function and object
-	template<class SourceType, void (SourceType:: *TemplateFunction)(ArgumentTypes...)>
-	void Disconnect(SourceType *aSource)
-	{
-		for(auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
-		{
-			if(reinterpret_cast<VoidFunctionPointer>(&MemberFunction<SourceType, TemplateFunction>) == it->first && it->second == aSource)
-			{
-				mySubscribers.erase(it);
-				break;
-			}
-		}
-	}
-	template<class SourceType, void (*TemplateFunction)(SourceType *, ArgumentTypes...)>
-	void Disconnect(SourceType *aSource)
-	{
-		for(auto it = mySubscribers.begin(); it != mySubscribers.end(); it++)
-		{
-			if(reinterpret_cast<VoidFunctionPointer>(&StaticFunction<SourceType, TemplateFunction>) == it->first && it->second == aSource)
-			{
-				mySubscribers.erase(it);
-				break;
-			}
-		}
+		std::invoke(*aFunctor, aArguments...);
 	}
 };
